@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Sinh viên - B-Tree Indexing</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg-color: #f8fafc;
+            --border-color: #cbd5e1;
+            --highlight: #fef08a;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); margin: 0; padding: 20px; color: #334155; }
+        h1, h2 { text-align: center; color: #0f172a; margin-bottom: 10px;}
+        .container { display: flex; flex-wrap: wrap; gap: 20px; max-width: 1300px; margin: 0 auto; }
+        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); flex: 1; min-width: 300px; }
+        .controls { flex: 100%; display: flex; gap: 20px; flex-wrap: wrap; }
+        .control-box { background: #fff; padding: 15px; border-radius: 8px; flex: 1; min-width: 250px; border: 1px solid var(--border-color); }
+        input, select, button { width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 15px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; }
+        button { background-color: var(--primary); color: white; font-weight: bold; border: none; cursor: pointer; transition: 0.2s; }
+        button:hover { background-color: #1d4ed8; }
+        
+        .quick-result { display: none; padding: 12px 15px; border-radius: 6px; background-color: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        #quickSearchResult { margin-top: -5px; margin-bottom: 15px; }
+        #deleteResult { margin-top: 0px; margin-bottom: 0px; }
+        .quick-result.error-result { background-color: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+        .quick-result strong { color: #15803d; }
+        .quick-result.error-result strong { color: #b91c1c; }
+        .method-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 8px; background: #dbeafe; color: #1e3a8a; border: 1px solid #bfdbfe; }
+
+        .table-container { max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; margin-top: 10px; scroll-behavior: smooth; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border-bottom: 1px solid var(--border-color); padding: 10px; text-align: left; }
+        th { background-color: #f1f5f9; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); }
+        .highlight { background-color: var(--highlight) !important; transition: 0.5s; font-weight: bold;}
+        
+        /* B-Tree Styles */
+        .tree-container { overflow-x: auto; text-align: center; padding: 20px; background: #fafafa; border: 1px dashed #ccc; border-radius: 8px; perspective: 1000px; min-height: 200px;}
+        .tree { display: inline-block; transform-origin: top center; }
+        .tree ul { padding-top: 20px; position: relative; display: flex; justify-content: center; padding-left: 0; margin: 0; }
+        .tree li { float: left; text-align: center; list-style-type: none; position: relative; padding: 20px 5px 0 5px; }
+        .tree li::before, .tree li::after { content: ''; position: absolute; top: 0; right: 50%; border-top: 2px solid var(--primary); width: 50%; height: 20px; transition: all 0.5s ease;}
+        .tree li::after { right: auto; left: 50%; border-left: 2px solid var(--primary); }
+        .tree li:only-child::after, .tree li:only-child::before { display: none; }
+        .tree li:only-child { padding-top: 0; }
+        .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
+        .tree li:last-child::before { border-right: 2px solid var(--primary); border-radius: 0 4px 0 0; }
+        .tree li:first-child::after { border-radius: 4px 0 0 0; }
+        .tree ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid var(--primary); width: 0; height: 20px; transform: translateX(-50%); transition: all 0.5s ease;}
+        .tree > ul::before { display: none; }
+        
+        .btree-node { 
+            display: inline-block; border: 2px solid var(--primary); border-radius: 6px;
+            background: white; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        }
+        
+        /* KEY CSS CHO HIỆU ỨNG FLIP */
+        .btree-key { 
+            display: inline-block; padding: 10px 15px; border-right: 1px solid var(--border-color);
+            font-weight: bold; color: var(--primary); font-size: 14px; position: relative;
+            background-color: transparent;
+            /* Transition này sẽ được JS kích hoạt sau khi thiết lập xong tọa độ */
+        }
+        .btree-key:last-child { border-right: none; }
+        .btree-ptr { display: block; color: gray; font-size: 11px; margin-top: 4px; font-weight: normal;}
+
+        .node-new {
+            background-color: #dcfce3; color: #166534;
+        }
+
+        .message { padding: 12px; margin-bottom: 10px; border-radius: 4px; display: none; font-weight: bold; }
+        .success { background-color: #dcfce3; color: #166534; border: 1px solid #bbf7d0; display: block;}
+        .error { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; display: block;}
+    </style>
+</head>
+<body>
+
+    <h1>Hệ thống Quản lý Sinh viên</h1>
+    
+    <div class="container">
+        <div class="controls">
+            <div class="control-box">
+                <h3>Thêm Sinh Viên Thủ Công</h3>
+                <input type="number" id="svId" placeholder="Mã SV (Dạng số)" required>
+                <input type="text" id="svName" placeholder="Họ và Tên" required>
+                <select id="svGender">
+                    <option value="Nam">Nam</option>
+                    <option value="Nữ">Nữ</option>
+                </select>
+                <button onclick="addStudent()">Thêm vào CSDL & Index</button>
+                <hr style="border:0; border-top:1px solid #ccc; margin:15px 0;">
+                <h3>Nhập từ File CSV</h3>
+                <input type="file" id="csvFileInput" accept=".csv" style="padding: 5px;">
+                <button onclick="importCSV()" style="background-color: #10b981;">Nhập Dữ Liệu CSV</button>
+            </div>
+            
+            <div class="control-box">
+                <h3>Tìm kiếm</h3>
+                <input type="text" id="searchQuery" placeholder="Nhập Mã SV hoặc Họ Tên">
+                <button onclick="searchStudent()">Tìm kiếm</button>
+                <div id="quickSearchResult" class="quick-result"></div>
+
+                <hr style="border:0; border-top:1px solid #ccc; margin:15px 0;">
+                
+                <h3>Xóa Sinh Viên</h3>
+                <input type="number" id="deleteId" placeholder="Nhập Mã SV cần xóa">
+                <button onclick="deleteStudent()" style="background-color: #ef4444; margin-bottom: 10px;">Xóa khỏi CSDL & Index</button>
+                <div id="deleteResult" class="quick-result"></div>
+            </div>
+        </div>
+
+        <div id="sysMessage" class="message"></div>
+
+        <div class="panel" style="flex: 100%;">
+            <h2>Chỉ mục B-Tree (Index trên cột Mã SV)</h2>
+            <div class="tree-container">
+                <div class="tree" id="treeView"></div>
+            </div>
+        </div>
+
+        <div class="panel" id="tablePanel" style="flex: 100%;">
+            <h2>Bảng Dữ liệu Gốc (Database)</h2>
+            <div class="table-container" id="dbTableContainer">
+                <table>
+                    <thead>
+                        <tr><th>Pointer</th><th>Mã SV</th><th>Họ và Tên</th><th>Giới tính</th></tr>
+                    </thead>
+                    <tbody id="dbTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+    class BTreeNode {
+        constructor(t, leaf) {
+            this.t = t; this.leaf = leaf; this.keys = []; this.children = [];
+        }
+    }
+
+    class BTree {
+        constructor(t) { this.t = t; this.root = new BTreeNode(t, true); }
+        search(k, node = this.root) {
+            let i = 0;
+            while (i < node.keys.length && k > node.keys[i].id) { i++; }
+            if (i < node.keys.length && k === node.keys[i].id) return node.keys[i];
+            if (node.leaf) return null;
+            return this.search(k, node.children[i]);
+        }
+        insert(id, pointer) {
+            let root = this.root;
+            if (root.keys.length === 2 * this.t - 1) {
+                let temp = new BTreeNode(this.t, false);
+                this.root = temp; temp.children.push(root);
+                this.splitChild(temp, 0, root); this.insertNonFull(temp, id, pointer);
+            } else { this.insertNonFull(root, id, pointer); }
+        }
+        splitChild(parent, i, fullChild) {
+            let t = this.t; let newChild = new BTreeNode(t, fullChild.leaf);
+            parent.children.splice(i + 1, 0, newChild);
+            parent.keys.splice(i, 0, fullChild.keys[t - 1]);
+            newChild.keys = fullChild.keys.splice(t, t - 1); fullChild.keys.pop();
+            if (!fullChild.leaf) newChild.children = fullChild.children.splice(t, t);
+        }
+        insertNonFull(node, id, pointer) {
+            let i = node.keys.length - 1;
+            if (node.leaf) {
+                node.keys.push(null);
+                while (i >= 0 && id < node.keys[i].id) { node.keys[i + 1] = node.keys[i]; i--; }
+                node.keys[i + 1] = { id, pointer };
+            } else {
+                while (i >= 0 && id < node.keys[i].id) { i--; }
+                i++;
+                if (node.children[i].keys.length === 2 * this.t - 1) {
+                    this.splitChild(node, i, node.children[i]);
+                    if (id > node.keys[i].id) i++;
+                }
+                this.insertNonFull(node.children[i], id, pointer);
+            }
+        }
+        rebuildFromData(db) {
+            this.root = new BTreeNode(this.t, true);
+            db.forEach(record => { if(record.active) this.insert(record.id, record.pointer); });
+        }
+    }
+
+    let database = []; let pointerCounter = 1000; let indexTree = new BTree(3);
+
+    // ==========================================
+    // FLIP ANIMATION ENGINE (Sự mượt mà nằm ở đây)
+    // ==========================================
+    function getPositions() {
+        let positions = {};
+        document.querySelectorAll('.btree-key').forEach(el => {
+            positions[el.getAttribute('data-id')] = el.getBoundingClientRect();
+        });
+        return positions;
+    }
+
+    function animateMovement(oldPositions, newId = null) {
+        let newElements = document.querySelectorAll('.btree-key');
+        
+        // BƯỚC 1: Lấy tọa độ hiện tại sau khi render DOM mới và Invert (Kéo nó về vị trí cũ)
+        newElements.forEach(el => {
+            let id = el.getAttribute('data-id');
+            let oldPos = oldPositions[id];
+            
+            if (oldPos) {
+                let newPos = el.getBoundingClientRect();
+                let deltaX = oldPos.left - newPos.left;
+                let deltaY = oldPos.top - newPos.top;
+                
+                // Kéo ngược nó về tọa độ cũ ngay lập tức (Không transition)
+                el.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                el.style.transition = 'none';
+            } else {
+                // Node mới: Thu nhỏ nó lại ở điểm xuất phát
+                el.style.transform = 'scale(0.1) translateY(-20px)';
+                el.style.opacity = '0';
+                el.style.transition = 'none';
+                if(parseInt(id) === newId) el.classList.add('node-new');
+            }
+        });
+
+        // Ép trình duyệt Reflow để nhận vị trí invert
+        void document.body.offsetHeight;
+
+        // BƯỚC 2: Play (Xóa transform cũ, dùng CSS Transition để nó bay từ vị trí cũ về vị trí mới hiện tại)
+        newElements.forEach(el => {
+            // Hiệu ứng lò xo nảy nảy (Cubic-bezier)
+            el.style.transition = 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.8s ease-out, background-color 1s ease';
+            el.style.transform = 'translate(0, 0) scale(1)';
+            el.style.opacity = '1';
+        });
+
+        // Bỏ class nháy xanh sau 2s
+        setTimeout(() => {
+            newElements.forEach(el => el.classList.remove('node-new'));
+        }, 2000);
+    }
+    // ==========================================
+
+    function renderTable(highlightPointer = null) {
+        const tbody = document.getElementById('dbTableBody'); tbody.innerHTML = '';
+        database.forEach(record => {
+            if (!record.active) return;
+            let tr = document.createElement('tr'); tr.id = `row-${record.pointer}`; 
+            if (record.pointer === highlightPointer) tr.className = 'highlight';
+            tr.innerHTML = `<td><code>0x${record.pointer}</code></td><td><strong>${record.id}</strong></td><td>${record.name}</td><td>${record.gender}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderTreeNode(node) {
+        let html = `<div class="btree-node">`;
+        node.keys.forEach(k => { 
+            // Bổ sung data-id để thuật toán FLIP nhận dạng được Node nào là Node nào
+            html += `<div class="btree-key" data-id="${k.id}">${k.id}<span class="btree-ptr">0x${k.pointer}</span></div>`; 
+        });
+        html += `</div>`;
+        if (!node.leaf && node.children.length > 0) {
+            html += `<ul>`;
+            node.children.forEach(child => { html += `<li>${renderTreeNode(child)}</li>`; });
+            html += `</ul>`;
+        }
+        return html;
+    }
+
+    function renderTree() {
+        const treeContainer = document.getElementById('treeView');
+        if (indexTree.root.keys.length === 0) treeContainer.innerHTML = '<p style="color:gray;">Index đang trống.</p>';
+        else treeContainer.innerHTML = `<ul><li>${renderTreeNode(indexTree.root)}</li></ul>`;
+    }
+
+    function showMessage(text, isError = false) {
+        const msg = document.getElementById('sysMessage'); msg.textContent = text;
+        msg.className = `message ${isError ? 'error' : 'success'}`;
+        setTimeout(() => { msg.style.display = 'none'; }, 6000);
+    }
+    function showQuickInfo(record, method) {
+        const box = document.getElementById('quickSearchResult'); box.className = 'quick-result'; box.style.display = 'block';
+        box.innerHTML = `<div class="method-badge">🔍 Tìm qua ${method}</div><br><strong>Mã SV:</strong> ${record.id} <br><strong>Họ Tên:</strong> ${record.name} <br><strong>Giới tính:</strong> ${record.gender} <br><span style="font-size: 12px; color: #475569; display:block; margin-top:5px;">Địa chỉ: 0x${record.pointer}</span>`;
+    }
+    function showNotFound(query) {
+        const box = document.getElementById('quickSearchResult'); box.className = 'quick-result error-result'; box.style.display = 'block';
+        box.innerHTML = `<strong>❌ Không tìm thấy!</strong><br>Không có SV nào khớp với: "${query}"`;
+    }
+    function hideQuickInfo() { document.getElementById('quickSearchResult').style.display = 'none'; }
+    function showDeleteResult(isSuccess, message) {
+        const box = document.getElementById('deleteResult'); box.style.display = 'block';
+        box.className = isSuccess ? 'quick-result' : 'quick-result error-result'; 
+        box.innerHTML = `<strong>${isSuccess ? '✅ Thành công!' : '❌ Thất bại!'}</strong><br>${message}`;
+        setTimeout(() => { box.style.display = 'none'; }, 5000);
+    }
+    function hideDeleteResult() { document.getElementById('deleteResult').style.display = 'none'; }
+    function scrollToPointer(pointer) {
+        const row = document.getElementById(`row-${pointer}`);
+        if (row) { const container = document.getElementById('dbTableContainer'); container.scrollTo({ top: row.offsetTop - container.offsetTop - 40, behavior: 'smooth' }); }
+    }
+
+    function addStudent(id, name, gender, isSilent = false) {
+        let inputId = id || parseInt(document.getElementById('svId').value);
+        let inputName = name || document.getElementById('svName').value;
+        let inputGender = gender || document.getElementById('svGender').value;
+
+        if (!inputId || !inputName) { if(!isSilent) showMessage("Vui lòng nhập đủ thông tin!", true); return false; }
+        if (indexTree.search(inputId) !== null) { if(!isSilent) showMessage(`Mã SV ${inputId} đã tồn tại!`, true); return false; }
+
+        let ptr = pointerCounter++;
+        database.push({ pointer: ptr, id: inputId, name: inputName, gender: inputGender, active: true });
+        
+        // 1. Chụp hình tọa độ CŨ trước khi thêm
+        let oldPositions = getPositions();
+        
+        // 2. Thay đổi thuật toán và DOM
+        indexTree.insert(inputId, ptr);
+        renderTree();
+        
+        // 3. Chạy thuật toán FLIP bay mượt mà
+        animateMovement(oldPositions, inputId);
+
+        if(!isSilent) {
+            renderTable(ptr);
+            scrollToPointer(ptr);
+            hideQuickInfo(); hideDeleteResult();
+            document.getElementById('svId').value = ''; document.getElementById('svName').value = '';
+        }
+        return true;
+    }
+
+    function searchStudent() {
+        hideQuickInfo(); hideDeleteResult();
+        let query = document.getElementById('searchQuery').value.trim(); if (!query) return;
+        let isNumber = !isNaN(query);
+        if (isNumber) {
+            let idQuery = parseInt(query); let result = indexTree.search(idQuery); 
+            if (result) {
+                let fullRecord = database.find(r => r.pointer === result.pointer);
+                renderTable(result.pointer); scrollToPointer(result.pointer); showQuickInfo(fullRecord, "B-Tree Index");
+            } else showNotFound(query);
+        } else {
+            let foundRecord = database.find(r => r.active && r.name.toLowerCase().includes(query.toLowerCase()));
+            if (foundRecord) {
+                renderTable(foundRecord.pointer); scrollToPointer(foundRecord.pointer); showQuickInfo(foundRecord, "Duyệt toàn bộ bảng");
+            } else showNotFound(query);
+        }
+    }
+
+    function deleteStudent() {
+        hideQuickInfo();
+        let id = parseInt(document.getElementById('deleteId').value);
+        if (!id) { showDeleteResult(false, "Vui lòng nhập Mã SV cần xóa!"); return; }
+
+        let searchResult = indexTree.search(id);
+        if (searchResult) {
+            let record = database.find(r => r.pointer === searchResult.pointer);
+            if(record) record.active = false;
+            
+            // 1. Chụp tọa độ cũ
+            let oldPositions = getPositions();
+            
+            // 2. Build lại cây và Render DOM mới
+            indexTree.rebuildFromData(database);
+            renderTree();
+            renderTable();
+            
+            // 3. FLIP Animation: Các Node tự dồn lại với nhau
+            animateMovement(oldPositions);
+            
+            showDeleteResult(true, `Đã xóa SV mã ${id}. Đã tổ chức lại Index.`);
+        } else { showDeleteResult(false, `Không tìm thấy sinh viên có mã ${id}!`); }
+        document.getElementById('deleteId').value = '';
+    }
+
+    function importCSV() {
+        const fileInput = document.getElementById('csvFileInput'); const file = fileInput.files[0];
+        if (!file) return showMessage("⚠️ Vui lòng chọn file CSV để nhập!", true);
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const lines = event.target.result.split(/\r?\n/);
+            let successCount = 0; let duplicateCount = 0;
+            
+            let oldPositions = getPositions();
+
+            for (let i = 0; i < lines.length; i++) {
+                const parts = lines[i].split(','); if (parts.length < 3) continue;
+                let idStr = parts[0].trim(); if (i === 0 && isNaN(parseInt(idStr))) continue; 
+                let id = parseInt(idStr); let name = parts[1].trim(); let gender = parts[2].trim();
+                if (isNaN(id) || !name) continue;
+                
+                // Silent Insert (Không chạy render từng bước)
+                if (addStudent(id, name, gender, true)) successCount++; else duplicateCount++;
+            }
+            
+            renderTable(); 
+            renderTree(); 
+            animateMovement(oldPositions); // FLIP tất cả cùng lúc
+            document.getElementById('csvFileInput').value = '';
+            
+            if (successCount > 0) showMessage(`✅ Đã nhập thành công ${successCount} SV. (Trùng/Lỗi: ${duplicateCount})`);
+            else showMessage("❌ Không có dữ liệu hợp lệ nào được thêm vào.", true);
+        };
+        reader.readAsText(file);
+    }
+
+    window.onload = () => {
+        let sampleData = [
+            { id: 415689, name: "Nguyễn Văn A", gender: "Nam" },
+            { id: 221584, name: "Trần Thị B", gender: "Nữ" },
+            { id: 608027, name: "Lê Văn C", gender: "Nam" },
+            { id: 187482, name: "Phạm Thị D", gender: "Nữ" }
+        ];
+        sampleData.forEach(sv => addStudent(sv.id, sv.name, sv.gender, true));
+        renderTable(); renderTree();
+    };
+</script>
+</body>
+</html>
