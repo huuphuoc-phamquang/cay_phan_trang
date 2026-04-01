@@ -11,11 +11,8 @@ def generate_students_csv(n, filename="danhsach_sinhvien.csv"):
     dem_nu = ["Thị", "Ngọc", "Thu", "Phương", "Thanh", "Bích", "Diễm", "Kim", "Nhã", "Hoài"]
     ten_nu = ["Hoa", "Lan", "Mai", "Trang", "Linh", "Thảo", "Hương", "Vy", "Anh", "Nhung", "My", "Tiên", "Yến"]
 
-    # Sinh danh sách ID ngẫu nhiên và không trùng lặp (ví dụ mã SV gồm 6 chữ số)
-    # random.sample đảm bảo các mã sinh viên là duy nhất
     student_ids = random.sample(range(100000, 999999), n)
 
-    # Mở file để ghi với chuẩn utf-8 để không bị lỗi font tiếng Việt
     with open(filename, mode='w', encoding='utf-8', newline='') as file:
         writer = csv.writer(file)
         
@@ -43,7 +40,6 @@ def generate_students_csv(n, filename="danhsach_sinhvien.csv"):
     print(f"Đã tạo thành công {n} sinh viên!")
     print(f"Tệp dữ liệu đã được lưu tại: {filename}")
 
-# --- THỰC THI CHƯƠNG TRÌNH ---
 # Gọi hàm và truyền vào số lượng sinh viên bạn muốn tạo (Ví dụ: 100)
 so_luong_sinh_vien = 2
 generate_students_csv(so_luong_sinh_vien)
